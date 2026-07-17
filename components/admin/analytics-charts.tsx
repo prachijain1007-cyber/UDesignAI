@@ -33,7 +33,7 @@ export function TopPagesChart({ data }: { data: DashboardAnalytics["topPages"] }
           <XAxis type="number" allowDecimals={false} stroke="#8a7c68" fontSize={12} />
           <YAxis type="category" dataKey="path" width={110} stroke="#8a7c68" fontSize={12} />
           <Tooltip cursor={{ fill: "#f3ede2" }} />
-          <Bar dataKey="count" fill={GOLD} radius={[0, 6, 6, 0]} />
+          <Bar dataKey="count" fill={GOLD} radius={[0, 6, 6, 0]} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>
@@ -49,7 +49,7 @@ export function TopCTAsChart({ data }: { data: DashboardAnalytics["topCTAs"] }) 
           <XAxis type="number" allowDecimals={false} stroke="#8a7c68" fontSize={12} />
           <YAxis type="category" dataKey="cta" width={130} stroke="#8a7c68" fontSize={12} />
           <Tooltip cursor={{ fill: "#f3ede2" }} />
-          <Bar dataKey="count" fill={TERRACOTTA} radius={[0, 6, 6, 0]} />
+          <Bar dataKey="count" fill={TERRACOTTA} radius={[0, 6, 6, 0]} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>
@@ -65,7 +65,7 @@ export function LeadSourcesChart({ data }: { data: DashboardAnalytics["leadsBySo
           <XAxis dataKey="source" stroke="#8a7c68" fontSize={12} />
           <YAxis allowDecimals={false} stroke="#8a7c68" fontSize={12} />
           <Tooltip cursor={{ fill: "#f3ede2" }} />
-          <Bar dataKey="count" fill={INK} radius={[6, 6, 0, 0]} />
+          <Bar dataKey="count" fill={INK} radius={[6, 6, 0, 0]} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>
