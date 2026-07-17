@@ -9,8 +9,11 @@ on WhatsApp — powered by an AI design consultant that never loses context.
 - **Next.js 15** (App Router, Server Components) + **React 19** + **TypeScript**
 - **Tailwind CSS v4** + **Framer Motion** — brand design system, dark mode
 - **PostgreSQL** + **Prisma** — leads, sessions, conversations, analytics
-- **OpenAI Responses API** — the "Mira" AI design consultant, with tool-calling
-  for lead qualification and consultation booking
+- **Google Gemini** — the "Mira" AI design consultant, with tool-calling for
+  lead qualification, consultation booking, and real image understanding
+  (free tier, no card required). Room-image generation defaults to a free
+  branded placeholder; set `DESIGN_IMAGE_PROVIDER=openai` for real AI renders
+  once you're ready to pay for that piece
 - **Meta WhatsApp Cloud API** — webhook-driven, signature-verified messaging
 - **jose** — Edge-compatible JWT admin authentication
 
@@ -31,7 +34,7 @@ components/
   ui/                  Shared primitives (Button, Container, ...)
 hooks/                 Client hooks (session tracking)
 lib/                   Config, validation, auth, prompt, scoring rules
-services/              Business logic / integrations (OpenAI, WhatsApp,
+services/              Business logic / integrations (Gemini, WhatsApp,
                        storage, lead scoring, analytics aggregation)
 prisma/                schema.prisma + seed script
 types/                 Shared TypeScript types
@@ -58,7 +61,8 @@ for the CRM (seeded admin credentials are printed by `db:seed`, default
 See `.env.example` for the full list and comments. At minimum for local dev:
 
 - `DATABASE_URL` — Postgres connection string
-- `OPENAI_API_KEY` — powers the AI design consultant and image generation
+- `GEMINI_API_KEY` — powers the "Mira" AI design consultant (chat, tool
+  calling, image understanding). Free at https://aistudio.google.com/apikey
 - `ADMIN_JWT_SECRET` — random string for signing admin sessions
 - `NEXT_PUBLIC_WHATSAPP_NUMBER` — number the floating button deep-links to
 - `WHATSAPP_CLOUD_API_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`,

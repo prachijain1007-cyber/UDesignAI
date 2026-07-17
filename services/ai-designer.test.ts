@@ -6,10 +6,10 @@ const mockPrisma = {
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
-const mockResponsesCreate = vi.fn();
-vi.mock("@/services/openai-client", () => ({
-  getOpenAIClient: () => ({ responses: { create: mockResponsesCreate } }),
-  AI_MODEL: "gpt-5-test",
+const mockGenerateContent = vi.fn();
+vi.mock("@/services/gemini-client", () => ({
+  getGeminiClient: () => ({ models: { generateContent: mockGenerateContent } }),
+  AI_MODEL: "gemini-flash-latest-test",
 }));
 
 const mockApplyLeadQualification = vi.fn();
@@ -22,6 +22,11 @@ vi.mock("@/services/consultation-service", () => ({
   bookConsultation: (...args: unknown[]) => mockBookConsultation(...args),
 }));
 
+const mockFetchFileBuffer = vi.fn();
+vi.mock("@/lib/fetch-file-buffer", () => ({
+  fetchFileBuffer: (...args: unknown[]) => mockFetchFileBuffer(...args),
+}));
+
 const { runAssistantTurn } = await import("./ai-designer");
 
 const BASE_CONTEXT = {
@@ -30,6 +35,8 @@ const BASE_CONTEXT = {
   selectedStyle: null,
   selectedRoomType: null,
   uploadedImageDescription: null,
+  uploadedImageUrl: null,
+  uploadedImageMimeType: null,
   lastGeneratedDesignSummary: null,
   viewedPricing: false,
   viewedConsultation: false,
@@ -41,23 +48,17 @@ const BASE_CONTEXT = {
   projectSize: null,
 };
 
-function textResponse(id: string, text: string) {
-  return { id, output: [], output_text: text };
+function textResponse(text: string) {
+  return { text, functionCalls: undefined, candidates: [{ content: { role: "model", parts: [{ text }] } }] };
 }
 
-function functionCallResponse(
-  id: string,
-  calls: Array<{ name: string; call_id: string; arguments: Record<string, unknown> }>
-) {
+function functionCallResponse(calls: Array<{ name: string; args: Record<string, unknown> }>) {
   return {
-    id,
-    output_text: "",
-    output: calls.map((c) => ({
-      type: "function_call" as const,
-      name: c.name,
-      call_id: c.call_id,
-      arguments: JSON.stringify(c.arguments),
-    })),
+    text: undefined,
+    functionCalls: calls,
+    candidates: [
+      { content: { role: "model", parts: calls.map((c) => ({ functionCall: { name: c.name, args: c.args } })) } },
+    ],
   };
 }
 
@@ -76,7 +77,7 @@ describe("runAssistantTurn", () => {
       { role: "USER", content: "I have a small living room." },
       { role: "ASSISTANT", content: "Got it — what style are you drawn to?" },
     ]);
-    mockResponsesCreate.mockResolvedValueOnce(textResponse("resp_1", "Scandinavian could work great here."));
+    mockGenerateContent.mockResolvedValueOnce(textResponse("Scandinavian could work great here."));
 
     await runAssistantTurn({
       conversationId: "conv_1",
@@ -86,18 +87,43 @@ describe("runAssistantTurn", () => {
       userMessage: "I like Scandinavian style.",
     });
 
-    expect(mockResponsesCreate).toHaveBeenCalledTimes(1);
-    const call = mockResponsesCreate.mock.calls[0][0];
-    expect(call.input).toEqual([
-      { role: "user", content: "I have a small living room." },
-      { role: "assistant", content: "Got it — what style are you drawn to?" },
-      { role: "user", content: "I like Scandinavian style." },
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+    const call = mockGenerateContent.mock.calls[0][0];
+    expect(call.contents).toEqual([
+      { role: "user", parts: [{ text: "I have a small living room." }] },
+      { role: "model", parts: [{ text: "Got it — what style are you drawn to?" }] },
+      { role: "user", parts: [{ text: "I like Scandinavian style." }] },
     ]);
+  });
+
+  it("attaches the uploaded room photo as inline image data for real image understanding", async () => {
+    mockPrisma.message.findMany.mockResolvedValueOnce([]);
+    mockFetchFileBuffer.mockResolvedValueOnce(Buffer.from("fake-jpeg-bytes"));
+    mockGenerateContent.mockResolvedValueOnce(textResponse("I can see your living room — lovely natural light!"));
+
+    await runAssistantTurn({
+      conversationId: "conv_1",
+      leadId: "lead_1",
+      sessionId: "sess_1",
+      context: {
+        ...BASE_CONTEXT,
+        uploadedImageUrl: "https://example.com/room.jpg",
+        uploadedImageMimeType: "image/jpeg",
+      },
+      userMessage: "What do you think of my room?",
+    });
+
+    const call = mockGenerateContent.mock.calls[0][0];
+    const lastMessageParts = call.contents.at(-1).parts;
+    expect(lastMessageParts).toHaveLength(2);
+    expect(lastMessageParts[0]).toEqual({ text: "What do you think of my room?" });
+    expect(lastMessageParts[1].inlineData.mimeType).toBe("image/jpeg");
+    expect(typeof lastMessageParts[1].inlineData.data).toBe("string");
   });
 
   it("persists the user message before calling the model and the assistant reply after", async () => {
     mockPrisma.message.findMany.mockResolvedValueOnce([]);
-    mockResponsesCreate.mockResolvedValueOnce(textResponse("resp_1", "Happy to help with that!"));
+    mockGenerateContent.mockResolvedValueOnce(textResponse("Happy to help with that!"));
 
     const result = await runAssistantTurn({
       conversationId: "conv_1",
@@ -127,13 +153,11 @@ describe("runAssistantTurn", () => {
     mockPrisma.message.findMany.mockResolvedValueOnce([]);
     mockApplyLeadQualification.mockResolvedValueOnce({ score: 55, tier: "WARM", reason: "budget=2k_10k" });
 
-    mockResponsesCreate
+    mockGenerateContent
       .mockResolvedValueOnce(
-        functionCallResponse("resp_1", [
-          { name: "update_lead_profile", call_id: "call_1", arguments: { budget: "2k_10k", roomType: "Kitchen" } },
-        ])
+        functionCallResponse([{ name: "update_lead_profile", args: { budget: "2k_10k", roomType: "Kitchen" } }])
       )
-      .mockResolvedValueOnce(textResponse("resp_2", "Great, a mid-range kitchen refresh is very doable!"));
+      .mockResolvedValueOnce(textResponse("Great, a mid-range kitchen refresh is very doable!"));
 
     const result = await runAssistantTurn({
       conversationId: "conv_1",
@@ -151,26 +175,25 @@ describe("runAssistantTurn", () => {
     expect(result.bookedConsultation).toBe(false);
     expect(result.reply).toBe("Great, a mid-range kitchen refresh is very doable!");
 
-    // Second call must chain off the first response and submit the tool output.
-    expect(mockResponsesCreate).toHaveBeenCalledTimes(2);
-    const secondCall = mockResponsesCreate.mock.calls[1][0];
-    expect(secondCall.previous_response_id).toBe("resp_1");
-    expect(secondCall.input).toEqual([
-      { type: "function_call_output", call_id: "call_1", output: JSON.stringify({ ok: true, tier: "WARM" }) },
-    ]);
+    expect(mockGenerateContent).toHaveBeenCalledTimes(2);
+    const secondCall = mockGenerateContent.mock.calls[1][0];
+    const lastContent = secondCall.contents.at(-1);
+    expect(lastContent).toEqual({
+      role: "user",
+      parts: [{ functionResponse: { name: "update_lead_profile", response: { ok: true, tier: "WARM" } } }],
+    });
   });
 
   it("executes a book_consultation tool call and reports it in the result", async () => {
     mockPrisma.message.findMany.mockResolvedValueOnce([]);
     mockBookConsultation.mockResolvedValueOnce({ id: "consult_9" });
 
-    mockResponsesCreate
+    mockGenerateContent
       .mockResolvedValueOnce(
-        functionCallResponse("resp_1", [
+        functionCallResponse([
           {
             name: "book_consultation",
-            call_id: "call_1",
-            arguments: {
+            args: {
               preferredDate: "2026-08-01",
               preferredTime: "3pm",
               email: "jane@example.com",
@@ -179,7 +202,7 @@ describe("runAssistantTurn", () => {
           },
         ])
       )
-      .mockResolvedValueOnce(textResponse("resp_2", "You're booked for August 1st at 3pm!"));
+      .mockResolvedValueOnce(textResponse("You're booked for August 1st at 3pm!"));
 
     const result = await runAssistantTurn({
       conversationId: "conv_1",
@@ -206,27 +229,17 @@ describe("runAssistantTurn", () => {
     mockApplyLeadQualification.mockResolvedValueOnce({ score: 20, tier: "COLD", reason: "timeline=just_browsing" });
     mockBookConsultation.mockResolvedValueOnce({ id: "consult_1" });
 
-    mockResponsesCreate
+    mockGenerateContent
+      .mockResolvedValueOnce(functionCallResponse([{ name: "update_lead_profile", args: { timeline: "just_browsing" } }]))
       .mockResolvedValueOnce(
-        functionCallResponse("resp_1", [
-          { name: "update_lead_profile", call_id: "call_1", arguments: { timeline: "just_browsing" } },
-        ])
-      )
-      .mockResolvedValueOnce(
-        functionCallResponse("resp_2", [
+        functionCallResponse([
           {
             name: "book_consultation",
-            call_id: "call_2",
-            arguments: {
-              preferredDate: "tomorrow",
-              preferredTime: "morning",
-              email: "a@b.com",
-              phone: "123",
-            },
+            args: { preferredDate: "tomorrow", preferredTime: "morning", email: "a@b.com", phone: "123" },
           },
         ])
       )
-      .mockResolvedValueOnce(textResponse("resp_3", "All set — see you then!"));
+      .mockResolvedValueOnce(textResponse("All set — see you then!"));
 
     const result = await runAssistantTurn({
       conversationId: "conv_1",
@@ -236,7 +249,7 @@ describe("runAssistantTurn", () => {
       userMessage: "Just browsing, but let's book anyway.",
     });
 
-    expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
+    expect(mockGenerateContent).toHaveBeenCalledTimes(3);
     expect(result.leadProfileUpdated).toBe(true);
     expect(result.bookedConsultation).toBe(true);
     expect(result.reply).toBe("All set — see you then!");
@@ -246,17 +259,16 @@ describe("runAssistantTurn", () => {
     mockPrisma.message.findMany.mockResolvedValueOnce([]);
     mockBookConsultation.mockRejectedValueOnce(new Error("email is required"));
 
-    mockResponsesCreate
+    mockGenerateContent
       .mockResolvedValueOnce(
-        functionCallResponse("resp_1", [
+        functionCallResponse([
           {
             name: "book_consultation",
-            call_id: "call_1",
-            arguments: { preferredDate: "tomorrow", preferredTime: "morning", email: "", phone: "" },
+            args: { preferredDate: "tomorrow", preferredTime: "morning", email: "", phone: "" },
           },
         ])
       )
-      .mockResolvedValueOnce(textResponse("resp_2", "Looks like I still need your email and phone."));
+      .mockResolvedValueOnce(textResponse("Looks like I still need your email and phone."));
 
     const result = await runAssistantTurn({
       conversationId: "conv_1",
@@ -267,14 +279,15 @@ describe("runAssistantTurn", () => {
     });
 
     expect(result.bookedConsultation).toBe(false);
-    const secondCall = mockResponsesCreate.mock.calls[1][0];
-    expect(secondCall.input[0].output).toContain('"ok":false');
-    expect(secondCall.input[0].output).toContain("email is required");
+    const secondCall = mockGenerateContent.mock.calls[1][0];
+    const responsePart = secondCall.contents.at(-1).parts[0].functionResponse.response;
+    expect(responsePart.ok).toBe(false);
+    expect(responsePart.error).toContain("email is required");
   });
 
-  it("falls back to a holding reply when the model returns no output_text", async () => {
+  it("falls back to a holding reply when the model returns no text", async () => {
     mockPrisma.message.findMany.mockResolvedValueOnce([]);
-    mockResponsesCreate.mockResolvedValueOnce({ id: "resp_1", output: [], output_text: "" });
+    mockGenerateContent.mockResolvedValueOnce({ text: undefined, functionCalls: undefined, candidates: [] });
 
     const result = await runAssistantTurn({
       conversationId: "conv_1",

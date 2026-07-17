@@ -41,6 +41,8 @@ export async function buildAIContextForSession(params: {
     uploadedImageDescription: latestImage
       ? `a ${latestImage.roomTypeGuess ?? "room"} photo uploaded ${latestImage.createdAt.toDateString()}`
       : null,
+    uploadedImageUrl: latestImage?.url ?? null,
+    uploadedImageMimeType: latestImage?.mimeType ?? null,
     lastGeneratedDesignSummary: latestDesign
       ? `a ${latestDesign.style} ${latestDesign.roomType} concept`
       : null,

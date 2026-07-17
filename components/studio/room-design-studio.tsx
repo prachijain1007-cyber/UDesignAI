@@ -237,7 +237,7 @@ export function RoomDesignStudio() {
                 alt={`${style} ${roomType} AI-generated design`}
                 fill
                 className="object-cover"
-                unoptimized={design.resultImageUrl.startsWith("http")}
+                unoptimized={design.resultImageUrl.startsWith("http") || design.resultImageUrl.endsWith(".svg")}
               />
             ) : uploadedImage ? (
               <Image src={uploadedImage.url} alt="Uploaded room" fill className="object-cover opacity-70" />

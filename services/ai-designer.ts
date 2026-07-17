@@ -1,9 +1,10 @@
-import type { ResponseInputItem, Tool } from "openai/resources/responses/responses";
+import type { Content, FunctionDeclaration, Part } from "@google/genai";
 import { prisma } from "@/lib/prisma";
-import { getOpenAIClient, AI_MODEL } from "@/services/openai-client";
+import { getGeminiClient, AI_MODEL } from "@/services/gemini-client";
 import { buildSystemPrompt } from "@/lib/ai-system-prompt";
 import { applyLeadQualification } from "@/services/lead-scoring";
 import { bookConsultation } from "@/services/consultation-service";
+import { fetchFileBuffer } from "@/lib/fetch-file-buffer";
 import {
   BUDGET_OPTIONS,
   TIMELINE_OPTIONS,
@@ -15,13 +16,12 @@ import {
 import type { AIConversationContext, AIChatTurnResult } from "@/types/ai";
 import type { Ownership } from "@prisma/client";
 
-const tools: Tool[] = [
+const functionDeclarations: FunctionDeclaration[] = [
   {
-    type: "function",
     name: "update_lead_profile",
     description:
       "Record or update qualification details you have learned about this visitor during the conversation. Call this as soon as you learn any single field — you do not need to wait until you know everything.",
-    parameters: {
+    parametersJsonSchema: {
       type: "object",
       properties: {
         budget: { type: "string", enum: [...BUDGET_OPTIONS] },
@@ -36,17 +36,13 @@ const tools: Tool[] = [
         email: { type: "string" },
         phone: { type: "string" },
       },
-      required: [],
-      additionalProperties: false,
     },
-    strict: false,
   },
   {
-    type: "function",
     name: "book_consultation",
     description:
       "Book a free design consultation once you have collected preferred date, preferred time, email and phone.",
-    parameters: {
+    parametersJsonSchema: {
       type: "object",
       properties: {
         preferredDate: { type: "string", description: "e.g. '2026-07-22' or 'next Tuesday'" },
@@ -56,11 +52,11 @@ const tools: Tool[] = [
         notes: { type: "string" },
       },
       required: ["preferredDate", "preferredTime", "email", "phone"],
-      additionalProperties: false,
     },
-    strict: false,
   },
 ];
+
+const tools = [{ functionDeclarations }];
 
 interface RunTurnParams {
   conversationId: string;
@@ -71,16 +67,37 @@ interface RunTurnParams {
   incomingWhatsappMessageId?: string;
 }
 
-function extractOutputText(response: { output_text?: string }): string {
-  if (response.output_text && response.output_text.trim().length > 0) {
-    return response.output_text.trim();
+function extractOutputText(text: string | undefined): string {
+  if (text && text.trim().length > 0) {
+    return text.trim();
   }
   return "I'm here and thinking through that — could you tell me a little more?";
 }
 
+async function buildUserMessageParts(
+  userMessage: string,
+  context: AIConversationContext
+): Promise<Part[]> {
+  const parts: Part[] = [{ text: userMessage }];
+
+  if (context.uploadedImageUrl && context.uploadedImageMimeType) {
+    try {
+      const buffer = await fetchFileBuffer(context.uploadedImageUrl);
+      parts.push({
+        inlineData: { mimeType: context.uploadedImageMimeType, data: buffer.toString("base64") },
+      });
+    } catch (error) {
+      // If the photo can't be read, keep going text-only rather than failing the whole turn.
+      console.error("[ai-designer] failed to attach uploaded room photo", error);
+    }
+  }
+
+  return parts;
+}
+
 export async function runAssistantTurn(params: RunTurnParams): Promise<AIChatTurnResult> {
   const { conversationId, leadId, sessionId, context, userMessage, incomingWhatsappMessageId } = params;
-  const openai = getOpenAIClient();
+  const ai = getGeminiClient();
 
   const priorMessages = await prisma.message.findMany({
     where: { conversationId },
@@ -97,21 +114,22 @@ export async function runAssistantTurn(params: RunTurnParams): Promise<AIChatTur
     },
   });
 
-  const input: ResponseInputItem[] = [
+  const contents: Content[] = [
     ...priorMessages.map(
-      (m): ResponseInputItem => ({
-        role: m.role === "ASSISTANT" ? "assistant" : "user",
-        content: m.content,
+      (m): Content => ({
+        role: m.role === "ASSISTANT" ? "model" : "user",
+        parts: [{ text: m.content }],
       })
     ),
-    { role: "user", content: userMessage },
+    { role: "user", parts: await buildUserMessageParts(userMessage, context) },
   ];
 
-  let response = await openai.responses.create({
+  const systemInstruction = buildSystemPrompt(context);
+
+  let response = await ai.models.generateContent({
     model: AI_MODEL,
-    instructions: buildSystemPrompt(context),
-    input,
-    tools,
+    contents,
+    config: { systemInstruction, tools },
   });
 
   let bookedConsultation = false;
@@ -119,18 +137,18 @@ export async function runAssistantTurn(params: RunTurnParams): Promise<AIChatTur
   let iterations = 0;
 
   while (iterations < 3) {
-    const functionCalls = response.output.filter(
-      (item): item is Extract<typeof item, { type: "function_call" }> =>
-        item.type === "function_call"
-    );
+    const functionCalls = response.functionCalls ?? [];
     if (functionCalls.length === 0) break;
 
-    const toolOutputs: ResponseInputItem[] = [];
+    const modelContent = response.candidates?.[0]?.content;
+    if (modelContent) contents.push(modelContent);
+
+    const responseParts: Part[] = [];
 
     for (const call of functionCalls) {
       let result: Record<string, unknown> = { ok: false };
       try {
-        const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
+        const args = (call.args ?? {}) as Record<string, unknown>;
 
         if (call.name === "update_lead_profile") {
           const scoreResult = await applyLeadQualification(leadId, {
@@ -165,24 +183,21 @@ export async function runAssistantTurn(params: RunTurnParams): Promise<AIChatTur
         result = { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
 
-      toolOutputs.push({
-        type: "function_call_output",
-        call_id: call.call_id,
-        output: JSON.stringify(result),
-      });
+      responseParts.push({ functionResponse: { name: call.name, response: result } });
     }
 
-    response = await openai.responses.create({
+    contents.push({ role: "user", parts: responseParts });
+
+    response = await ai.models.generateContent({
       model: AI_MODEL,
-      previous_response_id: response.id,
-      input: toolOutputs,
-      tools,
+      contents,
+      config: { systemInstruction, tools },
     });
 
     iterations += 1;
   }
 
-  const reply = extractOutputText(response);
+  const reply = extractOutputText(response.text);
 
   const assistantMessage = await prisma.message.create({
     data: { conversationId, role: "ASSISTANT", content: reply },

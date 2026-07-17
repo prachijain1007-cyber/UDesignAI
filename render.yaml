@@ -19,10 +19,14 @@ services:
           property: connectionString
       - key: NEXT_PUBLIC_SITE_URL
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: DESIGN_IMAGE_PROVIDER
+        value: placeholder
       - key: OPENAI_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-5
       - key: WHATSAPP_CLOUD_API_TOKEN
         sync: false
       - key: WHATSAPP_PHONE_NUMBER_ID

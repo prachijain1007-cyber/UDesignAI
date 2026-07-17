@@ -3,6 +3,7 @@ import { readFile } from "fs/promises";
 import { toFile } from "openai";
 import { getOpenAIClient } from "@/services/openai-client";
 import { saveUploadedFile } from "@/services/storage";
+import { buildPlaceholderDesignSvg, svgToDataBuffer } from "@/lib/design-placeholder";
 
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
 
@@ -33,14 +34,17 @@ async function extractImageBuffer(data: { b64_json?: string; url?: string }): Pr
   throw new Error("Image generation response contained no image data");
 }
 
-export async function generateDesignImage(params: {
+/**
+ * Real AI image generation via OpenAI (images.edit when a source photo was
+ * uploaded, otherwise images.generate). Costs money per call — only used
+ * when DESIGN_IMAGE_PROVIDER=openai.
+ */
+async function generateWithOpenAI(params: {
   roomType: string;
   style: string;
   sourceImageUrl?: string | null;
-}): Promise<{ url: string }> {
+}): Promise<Buffer> {
   const openai = getOpenAIClient();
-
-  let buffer: Buffer;
 
   if (params.sourceImageUrl) {
     const sourceBuffer = await readSourceImageBuffer(params.sourceImageUrl);
@@ -54,20 +58,45 @@ export async function generateDesignImage(params: {
 
     const image = result.data?.[0];
     if (!image) throw new Error("No image returned from edit");
-    buffer = await extractImageBuffer(image);
-  } else {
-    const result = await openai.images.generate({
-      model: IMAGE_MODEL,
-      prompt: buildConceptPrompt(params.roomType, params.style),
-      size: "1024x1024",
-    });
-
-    const image = result.data?.[0];
-    if (!image) throw new Error("No image returned from generate");
-    buffer = await extractImageBuffer(image);
+    return extractImageBuffer(image);
   }
 
-  const file = new File([new Uint8Array(buffer)], `design-${Date.now()}.png`, { type: "image/png" });
+  const result = await openai.images.generate({
+    model: IMAGE_MODEL,
+    prompt: buildConceptPrompt(params.roomType, params.style),
+    size: "1024x1024",
+  });
+
+  const image = result.data?.[0];
+  if (!image) throw new Error("No image returned from generate");
+  return extractImageBuffer(image);
+}
+
+/**
+ * Free, zero-cost fallback: a branded SVG "concept preview" card instead of
+ * a real AI render. This is the default so the app runs at no cost until a
+ * paid image API is deliberately enabled.
+ */
+async function generateWithPlaceholder(params: { roomType: string; style: string }): Promise<Buffer> {
+  const svg = buildPlaceholderDesignSvg(params.roomType, params.style);
+  return svgToDataBuffer(svg);
+}
+
+export async function generateDesignImage(params: {
+  roomType: string;
+  style: string;
+  sourceImageUrl?: string | null;
+}): Promise<{ url: string }> {
+  const provider = process.env.DESIGN_IMAGE_PROVIDER ?? "placeholder";
+
+  const buffer =
+    provider === "openai" ? await generateWithOpenAI(params) : await generateWithPlaceholder(params);
+
+  const isPlaceholder = provider !== "openai";
+  const file = isPlaceholder
+    ? new File([new Uint8Array(buffer)], `design-${Date.now()}.svg`, { type: "image/svg+xml" })
+    : new File([new Uint8Array(buffer)], `design-${Date.now()}.png`, { type: "image/png" });
+
   const stored = await saveUploadedFile(file);
   return { url: stored.url };
 }
