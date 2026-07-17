@@ -68,6 +68,7 @@ interface RunTurnParams {
   sessionId: string | null;
   context: AIConversationContext;
   userMessage: string;
+  incomingWhatsappMessageId?: string;
 }
 
 function extractOutputText(response: { output_text?: string }): string {
@@ -78,7 +79,7 @@ function extractOutputText(response: { output_text?: string }): string {
 }
 
 export async function runAssistantTurn(params: RunTurnParams): Promise<AIChatTurnResult> {
-  const { conversationId, leadId, sessionId, context, userMessage } = params;
+  const { conversationId, leadId, sessionId, context, userMessage, incomingWhatsappMessageId } = params;
   const openai = getOpenAIClient();
 
   const priorMessages = await prisma.message.findMany({
@@ -88,7 +89,12 @@ export async function runAssistantTurn(params: RunTurnParams): Promise<AIChatTur
   });
 
   await prisma.message.create({
-    data: { conversationId, role: "USER", content: userMessage },
+    data: {
+      conversationId,
+      role: "USER",
+      content: userMessage,
+      whatsappMessageId: incomingWhatsappMessageId,
+    },
   });
 
   const input: ResponseInputItem[] = [
@@ -178,7 +184,7 @@ export async function runAssistantTurn(params: RunTurnParams): Promise<AIChatTur
 
   const reply = extractOutputText(response);
 
-  await prisma.message.create({
+  const assistantMessage = await prisma.message.create({
     data: { conversationId, role: "ASSISTANT", content: reply },
   });
 
@@ -187,5 +193,5 @@ export async function runAssistantTurn(params: RunTurnParams): Promise<AIChatTur
     data: { updatedAt: new Date() },
   });
 
-  return { reply, bookedConsultation, leadProfileUpdated };
+  return { reply, bookedConsultation, leadProfileUpdated, assistantMessageId: assistantMessage.id };
 }

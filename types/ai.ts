@@ -19,4 +19,5 @@ export interface AIChatTurnResult {
   reply: string;
   bookedConsultation: boolean;
   leadProfileUpdated: boolean;
+  assistantMessageId: string;
 }
