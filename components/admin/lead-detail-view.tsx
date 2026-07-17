@@ -111,6 +111,7 @@ export function LeadDetailView({
               setStatus(value);
               patchLead({ status: value });
             }}
+            aria-label="Lead status"
             className="rounded-full border border-brand-border bg-white px-4 py-2 text-sm"
           >
             {STATUS_OPTIONS.map((s) => (
@@ -126,6 +127,7 @@ export function LeadDetailView({
               setAssignedToId(e.target.value);
               patchLead({ assignedToId: e.target.value || null });
             }}
+            aria-label="Assigned team member"
             className="rounded-full border border-brand-border bg-white px-4 py-2 text-sm"
           >
             <option value="">Unassigned</option>
@@ -171,6 +173,7 @@ export function LeadDetailView({
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
                   placeholder="Add tag"
+                  aria-label="New tag"
                   className="w-24 rounded-full border border-dashed border-brand-border px-3 py-1 text-xs outline-none focus:border-brand-gold"
                 />
                 <button type="button" onClick={handleAddTag} aria-label="Add tag">
@@ -241,6 +244,7 @@ export function LeadDetailView({
                 onChange={(e) => setNoteInput(e.target.value)}
                 rows={3}
                 placeholder="Leave a note for the team..."
+                aria-label="New note"
                 className="rounded-xl border border-brand-border p-3 text-sm outline-none focus:border-brand-gold"
               />
               <button

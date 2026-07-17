@@ -54,6 +54,7 @@ export function LeadsTable({ initialLeads }: { initialLeads: LeadListItem[] }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, email, phone..."
+            aria-label="Search leads by name, email, or phone"
             className="w-64 rounded-full border border-brand-border bg-white py-2 pl-9 pr-4 text-sm outline-none focus:border-brand-gold"
           />
         </div>
@@ -61,6 +62,7 @@ export function LeadsTable({ initialLeads }: { initialLeads: LeadListItem[] }) {
         <select
           value={tier}
           onChange={(e) => setTier(e.target.value as LeadTier | "")}
+          aria-label="Filter by tier"
           className="rounded-full border border-brand-border bg-white px-4 py-2 text-sm outline-none"
         >
           <option value="">All tiers</option>
@@ -74,6 +76,7 @@ export function LeadsTable({ initialLeads }: { initialLeads: LeadListItem[] }) {
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as LeadStatus | "")}
+          aria-label="Filter by status"
           className="rounded-full border border-brand-border bg-white px-4 py-2 text-sm outline-none"
         >
           <option value="">All statuses</option>

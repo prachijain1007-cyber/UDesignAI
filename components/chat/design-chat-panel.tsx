@@ -115,6 +115,7 @@ export function DesignChatPanel({ openingMessage }: { openingMessage?: string })
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
           placeholder="Ask about this design..."
+          aria-label="Ask Mira about this design"
           className="flex-1 rounded-full border border-brand-border bg-white px-4 py-2.5 text-sm text-brand-ink outline-none focus:border-brand-gold dark:bg-brand-ink-soft/5"
         />
         <button
