@@ -6,11 +6,8 @@ export async function buildAIContextForSession(params: {
   leadId?: string | null;
   channel: "WEBSITE_CHAT" | "WHATSAPP";
 }): Promise<AIConversationContext> {
-  const [session, lead, latestDesign, latestImage, pricingEvent, consultationEvent] =
+  const [lead, latestDesign, latestImage, pricingEvent, consultationEvent] =
     await Promise.all([
-      params.sessionId
-        ? prisma.visitorSession.findUnique({ where: { id: params.sessionId } })
-        : null,
       params.leadId ? prisma.lead.findUnique({ where: { id: params.leadId } }) : null,
       params.sessionId
         ? prisma.generatedDesign.findFirst({

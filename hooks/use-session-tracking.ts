@@ -40,7 +40,6 @@ export function useSessionTracking() {
     if (pathname.startsWith("/consultation")) {
       trackEvent({ type: "CONSULTATION_VIEWED", path: pathname });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   useEffect(() => {
