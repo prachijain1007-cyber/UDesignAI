@@ -35,7 +35,7 @@ async function callGraphAPI(body: Record<string, unknown>): Promise<Record<strin
         return (await response.json()) as Record<string, unknown>;
       }
 
-      // Don't retry client errors (bad request, invalid token, etc.)
+      // Don't retry client errors (bad request, invalid token, etc.) — fail fast.
       if (response.status >= 400 && response.status < 500) {
         const errorBody = await response.text();
         throw new Error(`WhatsApp API client error ${response.status}: ${errorBody}`);
@@ -44,6 +44,9 @@ async function callGraphAPI(body: Record<string, unknown>): Promise<Record<strin
       lastError = new Error(`WhatsApp API server error ${response.status}`);
     } catch (error) {
       lastError = error;
+      if (error instanceof Error && /client error/.test(error.message)) {
+        throw error;
+      }
     }
 
     if (attempt < maxAttempts) {
