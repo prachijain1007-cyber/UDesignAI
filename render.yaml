@@ -1,0 +1,41 @@
+databases:
+  - name: udesignai-postgres
+    plan: starter
+    databaseName: udesignai
+    user: udesignai
+
+services:
+  - type: web
+    name: udesignai
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /
+    preDeployCommand: npx prisma migrate deploy
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: udesignai-postgres
+          property: connectionString
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5
+      - key: WHATSAPP_CLOUD_API_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        sync: false
+      - key: WHATSAPP_WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_WHATSAPP_NUMBER
+        sync: false
+      - key: ADMIN_JWT_SECRET
+        generateValue: true
+      - key: STORAGE_DRIVER
+        value: local

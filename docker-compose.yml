@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: udesignai
+      POSTGRES_PASSWORD: udesignai
+      POSTGRES_DB: udesignai
+    ports:
+      - "5432:5432"
+    volumes:
+      - udesignai_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U udesignai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      target: builder
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://udesignai:udesignai@postgres:5432/udesignai?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["npx", "prisma", "migrate", "deploy"]
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://udesignai:udesignai@postgres:5432/udesignai?schema=public
+    ports:
+      - "3000:3000"
+    volumes:
+      - udesignai_uploads:/app/public/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  udesignai_postgres_data:
+  udesignai_uploads:
