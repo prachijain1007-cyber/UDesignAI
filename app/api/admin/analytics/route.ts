@@ -6,6 +6,11 @@ export async function GET() {
   const admin = await getCurrentAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const analytics = await getDashboardAnalytics();
-  return NextResponse.json(analytics);
+  try {
+    const analytics = await getDashboardAnalytics();
+    return NextResponse.json(analytics);
+  } catch (error) {
+    console.error("[admin/analytics] failed to compute analytics", error);
+    return NextResponse.json({ error: "Failed to load analytics" }, { status: 500 });
+  }
 }

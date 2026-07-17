@@ -21,10 +21,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const note = await prisma.leadNote.create({
-    data: { leadId: id, adminUserId: admin.sub, body: parsed.data.body },
-    include: { adminUser: { select: { name: true } } },
-  });
+  try {
+    const note = await prisma.leadNote.create({
+      data: { leadId: id, adminUserId: admin.sub, body: parsed.data.body },
+      include: { adminUser: { select: { name: true } } },
+    });
 
-  return NextResponse.json(note, { status: 201 });
+    return NextResponse.json(note, { status: 201 });
+  } catch (error) {
+    console.error("[admin/leads/:id/notes] failed to create note", error);
+    return NextResponse.json({ error: "Failed to save note" }, { status: 500 });
+  }
 }

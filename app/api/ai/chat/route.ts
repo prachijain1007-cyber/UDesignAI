@@ -4,8 +4,12 @@ import { getOrCreateWebsiteConversation } from "@/services/conversation-service"
 import { buildAIContextForSession } from "@/services/context-builder";
 import { runAssistantTurn } from "@/services/ai-designer";
 import { prisma } from "@/lib/prisma";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimitResponse(request, "ai-chat", { limit: 15, windowMs: 60_000 });
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await request.json();

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { generateDesignImage } from "@/services/design-generator";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 const requestSchema = z.object({
   sessionToken: z.string().min(1),
@@ -11,6 +12,9 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimitResponse(request, "designs", { limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await request.json();

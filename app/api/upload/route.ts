@@ -1,12 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { saveUploadedFile } from "@/services/storage";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
 
 export async function POST(request: NextRequest) {
-  const formData = await request.formData();
+  const limited = rateLimitResponse(request, "upload", { limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
+
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json({ error: "Invalid upload payload" }, { status: 400 });
+  }
+
   const file = formData.get("file");
   const sessionToken = formData.get("sessionToken");
   const roomTypeGuess = formData.get("roomType");
@@ -24,32 +34,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "File too large (max 10MB)" }, { status: 413 });
   }
 
-  const session = await prisma.visitorSession.upsert({
-    where: { sessionToken },
-    create: { sessionToken },
-    update: {},
-  });
+  try {
+    const session = await prisma.visitorSession.upsert({
+      where: { sessionToken },
+      create: { sessionToken },
+      update: {},
+    });
 
-  const stored = await saveUploadedFile(file);
+    const stored = await saveUploadedFile(file);
 
-  const image = await prisma.imageAsset.create({
-    data: {
-      sessionId: session.id,
-      url: stored.url,
-      storageKey: stored.storageKey,
-      mimeType: stored.mimeType,
-      sizeBytes: stored.sizeBytes,
-      roomTypeGuess: typeof roomTypeGuess === "string" ? roomTypeGuess : undefined,
-    },
-  });
+    const image = await prisma.imageAsset.create({
+      data: {
+        sessionId: session.id,
+        url: stored.url,
+        storageKey: stored.storageKey,
+        mimeType: stored.mimeType,
+        sizeBytes: stored.sizeBytes,
+        roomTypeGuess: typeof roomTypeGuess === "string" ? roomTypeGuess : undefined,
+      },
+    });
 
-  await prisma.websiteEvent.create({
-    data: {
-      sessionId: session.id,
-      type: "IMAGE_UPLOADED",
-      metadata: { imageId: image.id },
-    },
-  });
+    await prisma.websiteEvent.create({
+      data: {
+        sessionId: session.id,
+        type: "IMAGE_UPLOADED",
+        metadata: { imageId: image.id },
+      },
+    });
 
-  return NextResponse.json({ id: image.id, url: image.url }, { status: 201 });
+    return NextResponse.json({ id: image.id, url: image.url }, { status: 201 });
+  } catch (error) {
+    console.error("[upload] failed to store uploaded file", error);
+    return NextResponse.json({ error: "Upload failed. Please try again." }, { status: 500 });
+  }
 }
