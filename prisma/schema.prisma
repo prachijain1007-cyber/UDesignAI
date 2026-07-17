@@ -194,6 +194,7 @@ model Lead {
   roomType         String?
   style            String?
   tags             String[]   @default([])
+  dealValue        Int?
   assignedToId     String?
   assignedTo       AdminUser? @relation("AssignedLeads", fields: [assignedToId], references: [id])
   createdAt        DateTime   @default(now())
