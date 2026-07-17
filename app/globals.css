@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+/* Enable class-based dark mode (next-themes toggles `.dark` on <html>) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #faf7f2;
+  --foreground: #1c1815;
+
+  /* Brand palette — warm, premium interior-design tones */
+  --color-brand-cream: #faf7f2;
+  --color-brand-ivory: #f3ede2;
+  --color-brand-ink: #1c1815;
+  --color-brand-ink-soft: #2c2620;
+  --color-brand-gold: #b8874f;
+  --color-brand-gold-light: #dcb579;
+  --color-brand-gold-dark: #8f6435;
+  --color-brand-terracotta: #bc5b39;
+  --color-brand-sage: #6b7d63;
+  --color-brand-border: #e7ddcc;
+
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-inter);
+}
+
+.dark {
+  --background: #14110e;
+  --foreground: #f3ede2;
+
+  --color-brand-cream: #14110e;
+  --color-brand-ivory: #1e1a15;
+  --color-brand-ink: #f3ede2;
+  --color-brand-ink-soft: #d9cfbe;
+  --color-brand-gold: #dcb579;
+  --color-brand-gold-light: #ecd4a6;
+  --color-brand-gold-dark: #b8874f;
+  --color-brand-terracotta: #d97a52;
+  --color-brand-sage: #8ea084;
+  --color-brand-border: #332b22;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand-cream: var(--color-brand-cream);
+  --color-brand-ivory: var(--color-brand-ivory);
+  --color-brand-ink: var(--color-brand-ink);
+  --color-brand-ink-soft: var(--color-brand-ink-soft);
+  --color-brand-gold: var(--color-brand-gold);
+  --color-brand-gold-light: var(--color-brand-gold-light);
+  --color-brand-gold-dark: var(--color-brand-gold-dark);
+  --color-brand-terracotta: var(--color-brand-terracotta);
+  --color-brand-sage: var(--color-brand-sage);
+  --color-brand-border: var(--color-brand-border);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.85); opacity: 0.6; }
+    70% { transform: scale(1.5); opacity: 0; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+}
+
+* {
+  border-color: var(--color-brand-border);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-brand-cream);
+  color: var(--color-brand-ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--color-brand-gold);
+  color: var(--color-brand-cream);
+}
+
+.font-display {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+}
