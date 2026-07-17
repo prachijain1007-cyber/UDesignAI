@@ -10,7 +10,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: starter
-    healthCheckPath: /
+    healthCheckPath: /api/health
     preDeployCommand: npx prisma migrate deploy
     envVars:
       - key: DATABASE_URL
